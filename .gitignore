@@ -1,0 +1,12 @@
+.idea/
+.env
+node_modules/
+
+build/
+.DS_Store
+coverage/
+coverage.json
+*.log
+
+hardhat.config.ts
+truffle-config.js
