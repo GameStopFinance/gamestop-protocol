@@ -14,8 +14,8 @@ contract PostBootstrapRewardsDistributor is IDistributor, Ownable {
 
     event Distributed(address pool, uint256 gmeAmount);
 
-    event NewPoolsProposed(address stakingPool, address lpPool);
-    event PoolsChanged(address stakingPool, address lpPool);
+    event Proposed(address stakingPool, address lpPool);
+    event Executed(address stakingPool, address lpPool);
 
     IERC20 public gme;
 
@@ -40,21 +40,21 @@ contract PostBootstrapRewardsDistributor is IDistributor, Ownable {
         gme = _gme;
     }
 
-    function proposeNextPools(IPostBootstrapRewardDistributionRecipient stakingPool_, IPostBootstrapRewardDistributionRecipient lpPool_) public onlyOwner {
+    function propose(IPostBootstrapRewardDistributionRecipient stakingPool_, IPostBootstrapRewardDistributionRecipient lpPool_) public onlyOwner {
         lastProposalTime = block.timestamp;
         nextLPPool = lpPool_;
         nextStakingPool = stakingPool_;
 
-        emit NewPoolsProposed(address(stakingPool_), address(lpPool_));
+        emit Proposed(address(stakingPool_), address(lpPool_));
     }
 
-    function setNextPools() public onlyOwner {
+    function execute() public onlyOwner {
         require(block.timestamp > (lastProposalTime + timelock), "Timelock hasn't elapsed");
         require(address(nextStakingPool) != address(stakingPool), "No next staking pool set");
         require(address(nextLPPool) != address(lpPool), "No next LP pool set");
         lpPool = IPostBootstrapRewardDistributionRecipient(nextLPPool);
         stakingPool = IPostBootstrapRewardDistributionRecipient(nextStakingPool);
-        emit PoolsChanged(address(nextStakingPool), address(nextLPPool));
+        emit Executed(address(nextStakingPool), address(nextLPPool));
     }
 
     function distribute() public onlyOwner override {

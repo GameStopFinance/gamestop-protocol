@@ -86,7 +86,7 @@ describe('PostBootstrapRewardsDistributor', () => {
 
   it('should allow rewards to be distributed', async () => {
     // 1. Propose
-    await distributor.connect(operator).proposeNextPools(
+    await distributor.connect(operator).propose(
       stakingPool.address,
       lpPool.address
     )
@@ -97,7 +97,7 @@ describe('PostBootstrapRewardsDistributor', () => {
     await waitForTimelock()
 
     // 3. Update pool address
-    await distributor.connect(operator).setNextPools()
+    await distributor.connect(operator).execute()
 
     // 4. Verify
     expect(await distributor.stakingPool()).to.equal(stakingPool.address)
@@ -116,19 +116,19 @@ describe('PostBootstrapRewardsDistributor', () => {
   })
 
   it('should revert if called before timelock', async () => {
-    await distributor.connect(operator).proposeNextPools(
+    await distributor.connect(operator).propose(
       stakingPool.address,
       lpPool.address
     )
     expect(await distributor.nextStakingPool()).to.equal(stakingPool.address)
     expect(await distributor.nextLPPool()).to.equal(lpPool.address)
     await expect(
-      distributor.connect(operator).setNextPools()
+      distributor.connect(operator).execute()
     ).to.be.revertedWith(`Timelock hasn't elapsed`)
   })
 
   it('should revert if no change in address', async () => {
-    await distributor.connect(operator).proposeNextPools(
+    await distributor.connect(operator).propose(
       ZERO_ADDR,
       ZERO_ADDR
     )
@@ -136,7 +136,7 @@ describe('PostBootstrapRewardsDistributor', () => {
     await waitForTimelock()
 
     await expect(
-      distributor.connect(operator).setNextPools()
+      distributor.connect(operator).execute()
     ).to.be.revertedWith(`No next staking pool set`)
   })
 
@@ -156,14 +156,14 @@ describe('PostBootstrapRewardsDistributor', () => {
         7 * DAY
       )
 
-      await distributor.connect(operator).proposeNextPools(
+      await distributor.connect(operator).propose(
         PoolContract == MockStakingPool ? invalidPool.address : correctPool.address,
         PoolContract == MockLPPool ? invalidPool.address : correctPool.address
       )
 
       await waitForTimelock()
 
-      await distributor.connect(operator).setNextPools()
+      await distributor.connect(operator).execute()
 
       return distributor.connect(operator).distribute()
     }
