@@ -13,11 +13,11 @@ contract PostBootstrapRewardsDistributor is IDistributor, Ownable {
     using SafeMath for uint256;
 
     event Distributed(address pool, uint256 gmeAmount);
-    event NewLPPoolProposed(address LPPool);
-    event LPPoolChanged(address LPPool);
+
+    event NewPoolsProposed(address stakingPool, address lpPool);
+    event PoolsChanged(address stakingPool, address lpPool);
 
     IERC20 public gme;
-    IPostBootstrapRewardDistributionRecipient[] public pools;
 
     // 8 farming weeks after bootstrap
     // (500000 GME / 8) * 0.6
@@ -25,69 +25,63 @@ contract PostBootstrapRewardsDistributor is IDistributor, Ownable {
     // (500000 GME / 8) * 0.4
     uint256 public lpPoolRewardsPerWeek = 25000 ether;
 
-    uint256 public lpPoolTimelock = 12 hours;
+    uint256 public timelock = 12 hours;
+
     IPostBootstrapRewardDistributionRecipient public lpPool;
     IPostBootstrapRewardDistributionRecipient public nextLPPool;
+    IPostBootstrapRewardDistributionRecipient public stakingPool;
+    IPostBootstrapRewardDistributionRecipient public nextStakingPool;
+
     uint256 public lastProposalTime;
 
     constructor(
-        IERC20 _gme,
-        IPostBootstrapRewardDistributionRecipient[] memory _pools,
-        IPostBootstrapRewardDistributionRecipient _lpPool
+        IERC20 _gme
     ) public {
-        require(_pools.length != 0, 'a list of GME pools are required');
-
         gme = _gme;
-        pools = _pools;
-        lpPool = _lpPool;
-        nextLPPool = _lpPool;
     }
 
-    function proposeNextLPPool(IPostBootstrapRewardDistributionRecipient lpPool_) public onlyOwner {
+    function proposeNextPools(IPostBootstrapRewardDistributionRecipient stakingPool_, IPostBootstrapRewardDistributionRecipient lpPool_) public onlyOwner {
         lastProposalTime = block.timestamp;
         nextLPPool = lpPool_;
+        nextStakingPool = stakingPool_;
 
-        emit NewLPPoolProposed(address(lpPool_));
+        emit NewPoolsProposed(address(stakingPool_), address(lpPool_));
     }
 
-    function setNextLPPool() public onlyOwner {
-        require(block.timestamp > (lastProposalTime + lpPoolTimelock), "Timelock hasn't elapsed");
+    function setNextPools() public onlyOwner {
+        require(block.timestamp > (lastProposalTime + timelock), "Timelock hasn't elapsed");
+        require(address(nextStakingPool) != address(stakingPool), "No next staking pool set");
         require(address(nextLPPool) != address(lpPool), "No next LP pool set");
         lpPool = IPostBootstrapRewardDistributionRecipient(nextLPPool);
-        emit LPPoolChanged(address(nextLPPool));
+        stakingPool = IPostBootstrapRewardDistributionRecipient(nextStakingPool);
+        emit PoolsChanged(address(nextStakingPool), address(nextLPPool));
     }
 
     function distribute() public onlyOwner override {
         require(gme.balanceOf(address(this)) > 0, "Zero balance");
 
-        for (uint256 i = 0; i < pools.length; i++) {
-            require(
-                block.timestamp > pools[i].starttime(),
-                'Pool has not started yet'
-            );
-
-            require(
-                block.timestamp >= pools[i].periodFinish(),
-                'On-going pool'
-            );
-
-            gme.transfer(address(pools[i]), rewardsPerPoolPerWeek);
-            pools[i].notifyRewardAmount(rewardsPerPoolPerWeek);
-
-            emit Distributed(address(pools[i]), rewardsPerPoolPerWeek);
-        }
-
-        // Don't distribute to an pool 2 that has ended
-        // A new pool 2 will be deployed every week
+        // Must be a new pool that starts in future
+        // Pool duration must be 7 days
         require(
-            block.timestamp < lpPool.periodFinish(),
-            'Inactive LP pool'
+            block.timestamp < stakingPool.starttime() && 
+            stakingPool.DURATION() == 7 days,
+            'Invalid staking pool'
         );
 
+        require(
+            block.timestamp < lpPool.starttime() && 
+            lpPool.DURATION() == 7 days,
+            'Invalid LP pool'
+        );
+
+        // Distribute to staking pool
+        gme.transfer(address(stakingPool), rewardsPerPoolPerWeek);
+        stakingPool.notifyRewardAmount(rewardsPerPoolPerWeek);
+        emit Distributed(address(stakingPool), rewardsPerPoolPerWeek);
+
+        // Distribute to LP Pool
         gme.transfer(address(lpPool), lpPoolRewardsPerWeek);
         lpPool.notifyRewardAmount(lpPoolRewardsPerWeek);
-
         emit Distributed(address(lpPool), lpPoolRewardsPerWeek);
-
     }
 }

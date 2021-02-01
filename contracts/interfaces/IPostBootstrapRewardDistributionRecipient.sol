@@ -6,6 +6,7 @@ abstract contract IPostBootstrapRewardDistributionRecipient is Ownable {
     address public rewardDistribution;
     uint256 public starttime;
     uint256 public periodFinish;
+    uint256 public DURATION;
 
     function notifyRewardAmount(uint256 reward) external virtual;
 
